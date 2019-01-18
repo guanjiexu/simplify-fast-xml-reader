@@ -155,7 +155,7 @@ public class XmlReader {
     private volatile boolean _readFinishedSignal;
     private FileChannel _reader;
 
-    public volatile long _handledPos;
+    public long _handledPos;
 
     private ConcurrentLinkedQueue<FileLoadBuffer> _loaded = new ConcurrentLinkedQueue<>();
     private ConcurrentLinkedQueue<FileLoadBuffer> _rest = new ConcurrentLinkedQueue<>();
@@ -168,7 +168,7 @@ public class XmlReader {
                     break;
                 }
                 if (_rest.isEmpty()) {
-                    Thread.sleep(100);
+                    Thread.sleep(10);
                 } else {
                     FileLoadBuffer buf = _rest.poll();
                     buf.buffer.position(0);
@@ -199,7 +199,7 @@ public class XmlReader {
     }
 
     public XmlReader(String filename, long startPos) throws FileNotFoundException {
-        this(filename, startPos, 1024*1024, 20);
+        this(filename, startPos, 1024*1024, 10);
     }
 
     public XmlReader(String filename, long startPos, int bufferLength, int bufferCount) throws FileNotFoundException {
@@ -230,92 +230,92 @@ public class XmlReader {
     private void handleChar(byte b, long pos) {
         this._handledPos = pos;
         switch (b) {
-            case '<':
-                if (this._status._outerBlocked || !this.addChar(b)) {
+            case 60:  // '<'
+                if (_status._outerBlocked || !addChar(b)) {
                     if (this._textHandler != null && this._status._curStrCount != 0) {
                         this._textHandler.accept(this._status);
                     }
-                    this._status.reset();
-                    this._status._blockStartPos = pos;
+                    _status.reset();
+                    _status._blockStartPos = pos;
                 }
                 break;
-            case '/':
-                if (!this.addChar(b)) {
-                    if (pos - this._status._blockStartPos == 1) {
-                        this._status._isSingleTag = false;
+            case 47:    // /
+                if (!addChar(b)) {
+                    if (pos - _status._blockStartPos == 1) {
+                        _status._isSingleTag = false;
                     }
-                    this._status._tagSymbolSlash = true;
+                    _status._tagSymbolSlash = true;
                 }
                 break;
-            case ' ':
-            case '\t':
-            case '\n':
-            case '\r':
+            case 32:  // ' '
+            case 9:     // /t
+            case 12:
+            case 13:    // 换行
                 if (!this.addChar(b)) {
-                    if (this._status._curAttrNameCount != 0) {
-                        byte[] bytesName = this._status._attrs[this._status._attrsCount][0];
-                        byte[] bytesVal = this._status._attrs[this._status._attrsCount][1];
-                        System.arraycopy(this._status._attrNameStr, 0, bytesName, 0, this._status._curAttrNameCount);
-                        if (this._status._curStrCount >= 0) System.arraycopy(this._status._curStr, 0, bytesVal, 0, this._status._curStrCount);
-                        this._status._attrsPerCount[this._status._attrsCount][1] = this._status._curStrCount;
-                        this._status._attrsPerCount[this._status._attrsCount][0] = this._status._curAttrNameCount;
-                        this._status._curStrCount = 0;
-                        this._status._curAttrNameCount = 0;
-                        this._status._attrsCount++;
-                    } else if (this._status._tagNameCount == 0) {
+                    if (_status._curAttrNameCount != 0) {
+                        byte[] bytesName =  _status._attrs[this._status._attrsCount][0];
+                        byte[] bytesVal = _status._attrs[this._status._attrsCount][1];
+                        System.arraycopy(_status._attrNameStr, 0, bytesName, 0, this._status._curAttrNameCount);
+                        if (_status._curStrCount >= 0) System.arraycopy(this._status._curStr, 0, bytesVal, 0, this._status._curStrCount);
+                        _status._attrsPerCount[this._status._attrsCount][1] = this._status._curStrCount;
+                        _status._attrsPerCount[this._status._attrsCount][0] = this._status._curAttrNameCount;
+                        _status._curStrCount = 0;
+                        _status._curAttrNameCount = 0;
+                        _status._attrsCount++;
+                    } else if (_status._tagNameCount == 0) {
                         System.arraycopy(this._status._curStr, 0, this._status._tagName, 0, this._status._curStrCount);
-                        this._status._tagNameCount = this._status._curStrCount;
-                        this._status._curStrCount = 0;
+                        _status._tagNameCount = this._status._curStrCount;
+                        _status._curStrCount = 0;
                     } else {
-                        byte[] bytesName = this._status._attrs[this._status._attrsCount][0];
+                        byte[] bytesName = _status._attrs[this._status._attrsCount][0];
                         System.arraycopy(this._status._attrNameStr, 0, bytesName, 0, this._status._curAttrNameCount);
-                        this._status._attrsPerCount[this._status._attrsCount][1] = 0;
-                        this._status._attrsPerCount[this._status._attrsCount][0] = this._status._curAttrNameCount;
-                        this._status._curStrCount = 0;
-                        this._status._curAttrNameCount = 0;
-                        this._status._attrsCount++;
+                        _status._attrsPerCount[_status._attrsCount][1] = 0;
+                        _status._attrsPerCount[_status._attrsCount][0] = this._status._curAttrNameCount;
+                        _status._curStrCount = 0;
+                        _status._curAttrNameCount = 0;
+                        _status._attrsCount++;
                     }
                 }
                 break;
-            case '>':
-                if (!this.addChar(b)) {
-                    if (this._status._tagNameCount == 0) {
-                        System.arraycopy(this._status._curStr, 0, this._status._tagName, 0, this._status._curStrCount);
-                        this._status._tagNameCount = this._status._curStrCount;
-                        this._status._curStrCount = 0;
+            case 62: // >
+                if (!addChar(b)) {
+                    if (_status._tagNameCount == 0) {
+                        System.arraycopy(_status._curStr, 0, _status._tagName, 0, _status._curStrCount);
+                        _status._tagNameCount = _status._curStrCount;
+                        _status._curStrCount = 0;
                     }
                     this._status._blockEndPos = pos;
-                    if (this._status._isSingleTag) {
-                        if (this._startHandler != null) this._startHandler.accept(this._status);
-                    } else if (this._status._tagSymbolSlash) {
-                        if (this._endHandler != null) this._endHandler.accept(this._status);
+                    if (_status._isSingleTag) {
+                        if (_startHandler != null) _startHandler.accept(_status);
+                    } else if (_status._tagSymbolSlash) {
+                        if (_endHandler != null) this._endHandler.accept(_status);
                     } else {
-                        if (this._startHandler != null) this._endHandler.accept(this._status);
+                        if (_startHandler != null) _endHandler.accept(this._status);
                     }
-                    this._status.reset();
-                    this._status._curAttrNameCount = 0;
-                    this._status._outerBlocked = true;
+                    _status.reset();
+                    _status._curAttrNameCount = 0;
+                    _status._outerBlocked = true;
                 }
                 break;
-            case '=':
+            case 61:   // =
                 if (!this.addChar(b)) {
                     System.arraycopy(this._status._curStr, 0, this._status._attrNameStr, 0, this._status._curStrCount);
-                    this._status._curAttrNameCount = this._status._curStrCount;
-                    this._status._curStrCount = 0;
+                    _status._curAttrNameCount = this._status._curStrCount;
+                    _status._curStrCount = 0;
                 }
                 break;
-            case '\"':
-                this._status._tagSymbolQuote = !this._status._tagSymbolQuote;
+            case 34:   //
+                _status._tagSymbolQuote = !this._status._tagSymbolQuote;
                 break;
             case '?':
             case '!':
             case '-':
             case '[':
             case ']':
-                this.addChar(b);
+                addChar(b);
                 break;
             default:
-                this._status._curStr[this._status._curStrCount++] = b;
+                _status._curStr[this._status._curStrCount++] = b;
         }
     }
 
